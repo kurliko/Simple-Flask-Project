@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12 text-center mb-4">
+            <h1>Krypto-Centrum {{ user.username }}</h1>
+            <p class="text-muted">Ceny odświeżają się automatycznie co 10 sekund.</p>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mb-4">
+        <div class="col-md-6">
+            <div class="input-group">
+                <input type="text" id="cryptoInput" class="form-control" placeholder="Wpisz ID waluty (np. bitcoin, ethereum, dogecoin)">
+                <button class="btn btn-primary" onclick="addCrypto()">Obserwuj +</button>
+            </div>
+            <small class="text-muted">Wpisuj pełne nazwy angielskie (np. 'ripple' a nie 'XRP').</small>
+        </div>
+    </div>
+
+    <div class="row" id="crypto-container">
+        {% for crypto in favorites %}
+        <div class="col-md-4 mb-3" id="card-{{ crypto.symbol }}">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <h3 class="card-title text-uppercase">{{ crypto.symbol }}</h3>
+                    <h2 class="display-6 fw-bold price-tag" data-symbol="{{ crypto.symbol }}">Ładowanie...</h2>
+                    
+                    <button class="btn btn-sm btn-outline-danger mt-2" onclick="removeCrypto({{ crypto.id }}, '{{ crypto.symbol }}')">Usuń</button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-md-12">
+            <div class="card p-3">
+                <h4>Wykres na żywo (Bitcoin)</h4>
+                <canvas id="myChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    // --- 1. Konfiguracja Wykresu Chart.js ---
+    const ctx = document.getElementById('myChart').getContext('2d');
+    const myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [], // Czas (oś X)
+            datasets: [{
+                label: 'Cena Bitcoin (USD)',
+                data: [], // Ceny (oś Y)
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1,
+                fill: false
+            }]
+        }
+    });
+
+    // --- 2. Funkcja Pobierająca Ceny (CoinGecko API) ---
+    function fetchPrices() {
+        // Zbieramy wszystkie symbole z naszej strony (te które user ma w ulubionych)
+        const priceTags = document.querySelectorAll('.price-tag');
+        let symbols = [];
+        priceTags.forEach(tag => symbols.push(tag.dataset.symbol));
+
+        if (symbols.length === 0) return;
+
+        // Zapytanie do CoinGecko (XHR / Fetch)
+        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${symbols.join(',')}&vs_currencies=usd`;
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                // Aktualizacja kafelków
+                priceTags.forEach(tag => {
+                    const symbol = tag.dataset.symbol;
+                    if (data[symbol]) {
+                        const price = data[symbol].usd;
+                        tag.innerText = price + " $";
+                        
+                        // Jeśli to Bitcoin, dodaj punkt do wykresu
+                        if (symbol === 'bitcoin') {
+                            updateChart(price);
+                        }
+                    }
+                });
+            })
+            .catch(err => console.error("Błąd API CoinGecko:", err));
+    }
+
+    // --- 3. Funkcja Aktualizująca Wykres ---
+    function updateChart(price) {
+        const now = new Date().toLocaleTimeString();
+        
+        // Dodaj dane
+        myChart.data.labels.push(now);
+        myChart.data.datasets[0].data.push(price);
+
+        // Utrzymuj tylko ostatnie 10 punktów na wykresie (żeby się nie zatkał)
+        if (myChart.data.labels.length > 10) {
+            myChart.data.labels.shift();
+            myChart.data.datasets[0].data.shift();
+        }
+        myChart.update();
+    }
+
+    // --- 4. Funkcja Dodawania Waluty (Do Naszego Backend) ---
+    function addCrypto() {
+        const input = document.getElementById('cryptoInput');
+        const symbol = input.value.trim();
+
+        if (!symbol) return;
+
+        fetch('/api/add_crypto', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ symbol: symbol })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.message === 'Dodano') {
+                location.reload(); // Odśwież stronę, żeby zobaczyć nową kartę
+            } else {
+                alert("Błąd: " + data.message);
+            }
+        });
+    }
+
+    // --- 5. Funkcja Usuwania Waluty ---
+    function removeCrypto(id, symbol) {
+        if(!confirm("Usunąć " + symbol + "?")) return;
+
+        fetch('/api/delete_crypto', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ id: id })
+        })
+        .then(res => res.json())
+        .then(data => {
+            // Usuń element HTML bez przeładowania strony (Pełne SPA Experience!)
+            document.getElementById('card-' + symbol).remove();
+        });
+    }
+
+    // Uruchom pobieranie cen od razu, a potem co 10 sekund
+    fetchPrices();
+    setInterval(fetchPrices, 10000);
+
+</script>
+{% endblock %}
