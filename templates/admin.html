@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>👮 Panel Administratora</h1>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">← Wróć do Dashboardu</a>
+    </div>
+
+    <div class="card shadow">
+        <div class="card-header bg-danger text-white">
+            <h5 class="mb-0">Lista Użytkowników Systemu</h5>
+        </div>
+        <div class="card-body">
+            <p>Poniżej znajduje się lista wszystkich zarejestrowanych osób w bazie danych.</p>
+            
+            <table class="table table-hover table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th scope="col">ID</th>
+                        <th scope="col">Nazwa Użytkownika (Login)</th>
+                        <th scope="col">Rola</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td>{{ u.id }}</td>
+                        <td>
+                            <strong>{{ u.username }}</strong>
+                            {% if u.id == user.id %} (To Ty) {% endif %}
+                        </td>
+                        <td>
+                            {% if u.role == 'admin' %}
+                                <span class="badge bg-danger">ADMIN</span>
+                            {% else %}
+                                <span class="badge bg-primary">STUDENT</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

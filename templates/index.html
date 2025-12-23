@@ -1,11 +1,85 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="p-5 mb-4 bg-light rounded-3">
-    <div class="container-fluid py-5">
-        <h1 class="display-5 fw-bold">Witaj w systemie</h1>
-        <p class="col-md-8 fs-4">To jest projekt zaliczeniowy wykonany w technologii Python Flask.</p>
-        <a class="btn btn-primary btn-lg" href="{{ url_for('login') }}">Przejdź do logowania</a>
+<div class="container mt-5 text-center">
+    <h1 class="display-4">Witamy na Giełdzie! 📈</h1>
+    <p class="lead">Zaloguj się, aby stworzyć własny portfel obserwowanych.</p>
+    <hr class="my-4">
+
+    <div class="row justify-content-center" id="crypto-container">
+        {% for crypto in favorites %}
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm border-primary">
+                <div class="card-body">
+                    <h4 class="text-uppercase">{{ crypto.symbol }}</h4>
+                    <h3 class="price-tag text-primary" data-symbol="{{ crypto.symbol }}">Ładowanie...</h3>
+                </div>
+            </div>
+        </div>
+        {% else %}
+            <p>Admin jeszcze nie ustawił walut na stronie głównej.</p>
+        {% endfor %}
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-10 offset-md-1">
+            <canvas id="publicChart"></canvas>
+        </div>
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // 1. Wykres
+    const ctx = document.getElementById('publicChart').getContext('2d');
+    const publicChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Bitcoin (USD)',
+                data: [],
+                borderColor: 'rgb(255, 99, 132)', // Czerwony kolor dla gości
+                tension: 0.1
+            }]
+        }
+    });
+
+    // 2. Pobieranie danych
+    function fetchPublicPrices() {
+        const priceTags = document.querySelectorAll('.price-tag');
+        let symbols = [];
+        priceTags.forEach(tag => symbols.push(tag.dataset.symbol));
+
+        if (symbols.length === 0) return;
+
+        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${symbols.join(',')}&vs_currencies=usd`;
+
+        fetch(url)
+            .then(res => res.json())
+            .then(data => {
+                priceTags.forEach(tag => {
+                    const symbol = tag.dataset.symbol;
+                    if (data[symbol]) {
+                        tag.innerText = data[symbol].usd + " $";
+                        
+                        // Aktualizuj wykres jeśli to bitcoin
+                        if (symbol === 'bitcoin') {
+                            const now = new Date().toLocaleTimeString();
+                            publicChart.data.labels.push(now);
+                            publicChart.data.datasets[0].data.push(data[symbol].usd);
+                            if (publicChart.data.labels.length > 10) {
+                                publicChart.data.labels.shift();
+                                publicChart.data.datasets[0].data.shift();
+                            }
+                            publicChart.update();
+                        }
+                    }
+                });
+            });
+    }
+
+    fetchPublicPrices();
+    setInterval(fetchPublicPrices, 10000);
+</script>
 {% endblock %}

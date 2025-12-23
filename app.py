@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask import abort # <--- Dodaj import 'abort' na górze pliku
 
 app = Flask(__name__)
 
@@ -32,8 +33,11 @@ class FavoriteCrypto(db.Model):
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+
+
 # --- SETUP ---
 @app.route('/setup')
+@login_required  # <-- Musi być zalogowany
 def setup():
     with app.app_context():
         db.create_all()
@@ -58,9 +62,14 @@ def setup():
 
 @app.route('/')
 def index():
-    return render_template('index.html')
-
+    # Pobieramy ulubione kryptowaluty Admina (zakładamy, że Admin ma id=1)
+    # To one będą "domyślnymi" dla gości.
+    admin_favorites = FavoriteCrypto.query.filter_by(user_id=1).all()
+    return render_template('index.html', favorites=admin_favorites)
 @app.route('/login', methods=['GET', 'POST'])
+
+
+
 def login():
     if request.method == 'POST':
         username = request.form.get('username')
@@ -72,6 +81,29 @@ def login():
         else:
             return "Błędne hasło lub login", 401
     return render_template('login.html')
+
+# app.py (dodaj to pod funkcją login)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        # Sprawdź czy user już istnieje
+        user = User.query.filter_by(username=username).first()
+        if user:
+            return "Taki użytkownik już istnieje! Wybierz inną nazwę."
+        
+        # Stwórz nowego usera (domyślnie rola 'student')
+        hashed_pw = generate_password_hash(password, method='pbkdf2:sha256')
+        new_user = User(username=username, password=hashed_pw, role='student')
+        db.session.add(new_user)
+        db.session.commit()
+        
+        return redirect(url_for('login'))
+        
+    return render_template('register.html')
 
 @app.route('/dashboard')
 @login_required
@@ -119,5 +151,22 @@ def logout():
     logout_user()
     return redirect(url_for('index'))
 
+
+# app.py
+
+@app.route('/admin_panel')
+@login_required
+def admin_panel():
+    if current_user.role != 'admin':
+        return abort(403)
+    
+    users = User.query.all()
+    
+    # --- ZMIANA TUTAJ ---
+    # Musisz przekazać 'user=current_user', żeby HTML wiedział, kto jest zalogowany
+    return render_template('admin.html', users=users, user=current_user)
 if __name__ == '__main__':
     app.run(debug=True)
+
+
+
