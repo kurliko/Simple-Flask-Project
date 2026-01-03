@@ -2,8 +2,19 @@
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <title>Mój Projekt Zaliczeniowy</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Krypto-Portal</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    
+    <style>
+        /* Drobna poprawka dla wykresów w trybie ciemnym */
+        [data-bs-theme="dark"] .card {
+            background-color: #1e1e1e; /* Ciemniejszy szary */
+            border-color: #333;
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -39,6 +50,9 @@
                         <a class="btn btn-primary btn-sm ms-2" href="{{ url_for('register') }}">Rejestracja</a>
                     </li>
                 {% endif %}
+                    <button class="btn btn-outline-secondary ms-2" id="themeToggle">
+                        <i class="bi bi-moon-fill"></i>
+                    </button>
             </ul>
         </div>
     </div>
@@ -47,5 +61,38 @@
     <div class="container">
         {% block content %}{% endblock %}
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const toggleBtn = document.getElementById('themeToggle');
+    const htmlElement = document.documentElement;
+    const icon = toggleBtn.querySelector('i');
+
+    // 1. Sprawdź, co user wybrał wcześniej
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    htmlElement.setAttribute('data-bs-theme', savedTheme);
+    updateIcon(savedTheme);
+
+    // 2. Kliknięcie przycisku
+    toggleBtn.addEventListener('click', () => {
+        const currentTheme = htmlElement.getAttribute('data-bs-theme');
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        
+        htmlElement.setAttribute('data-bs-theme', newTheme);
+        localStorage.setItem('theme', newTheme);
+        updateIcon(newTheme);
+    });
+
+    function updateIcon(theme) {
+        if (theme === 'dark') {
+            icon.classList.remove('bi-moon-fill');
+            icon.classList.add('bi-sun-fill');
+            toggleBtn.classList.replace('btn-outline-secondary', 'btn-outline-warning');
+        } else {
+            icon.classList.remove('bi-sun-fill');
+            icon.classList.add('bi-moon-fill');
+            toggleBtn.classList.replace('btn-outline-warning', 'btn-outline-secondary');
+        }
+    }
+</script>
 </body>
 </html>

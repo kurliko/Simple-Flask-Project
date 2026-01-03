@@ -12,7 +12,7 @@
             <div class="card shadow-sm border-primary">
                 <div class="card-body">
                     <h4 class="text-uppercase">{{ crypto.symbol }}</h4>
-                    <h3 class="price-tag text-primary" data-symbol="{{ crypto.symbol }}">Ładowanie...</h3>
+                    <h3 class="price-tag text-primary" data-symbol="{{ crypto.symbol }}" id="price-{{ crypto.symbol }}">Ładowanie...</h3>
                 </div>
             </div>
         </div>
@@ -22,64 +22,190 @@
     </div>
 
     <div class="row mt-4">
-        <div class="col-md-10 offset-md-1">
-            <canvas id="publicChart"></canvas>
+        <div class="col-md-12">
+            <div class="card p-2 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center ps-3 pe-3 pt-2 pb-2">
+                    <h4 id="chart-title">Bitcoin (USD) - LIVE 🔴</h4>
+                    
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-danger btn-sm" id="btn-live" onclick="switchToLive()">LIVE ⚡</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="changeInterval(30, '30 Dni')">30D</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="changeInterval(365, '1 Rok')">1Y</button>
+                    </div>
+                </div>
+                
+                <div id="tv-chart" style="width: 100%; height: 500px;"></div>
+                <div class="text-end pe-2 text-muted small">Dane live: Binance WebSocket | Historia: CoinGecko</div>
+            </div>
         </div>
-    </div>
+    </div>  
 </div>
+<script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // 1. Wykres
-    const ctx = document.getElementById('publicChart').getContext('2d');
-    const publicChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'Bitcoin (USD)',
-                data: [],
-                borderColor: 'rgb(255, 99, 132)', // Czerwony kolor dla gości
-                tension: 0.1
-            }]
-        }
+    // ==========================================
+    // KONFIGURACJA WYKRESU
+    // ==========================================
+    const chartContainer = document.getElementById('tv-chart');
+    const chartTitle = document.getElementById('chart-title');
+    
+    // Cache trzymamy osobno dla Binance i CoinGecko
+    let chartCache = {}; 
+    let ws = null; 
+
+    const chart = LightweightCharts.createChart(chartContainer, {
+        width: chartContainer.clientWidth,
+        height: 500,
+        layout: { background: { color: 'transparent' }, textColor: '#888' },
+        grid: { vertLines: { color: '#444', visible: false }, horzLines: { color: '#444', visible: true } },
+        timeScale: { timeVisible: true, secondsVisible: true },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     });
 
-    // 2. Pobieranie danych
-    function fetchPublicPrices() {
+    const candleSeries = chart.addCandlestickSeries({
+        upColor: '#26a69a', downColor: '#ef5350',
+        borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+    });
+
+    // ==========================================
+    // 1. TRYB LIVE (BINANCE: Historia 1m + WebSocket)
+    // ==========================================
+    async function switchToLive() {
+        // Zmiana UI
+        document.getElementById('btn-live').className = "btn btn-danger btn-sm";
+        chartTitle.innerText = "Bitcoin (USD) - REAL TIME (1m) ⚡";
+
+        // Resetujemy przyciski "długoterminowe" na szare
+        document.querySelectorAll('.btn-group .btn-outline-secondary').forEach(btn => btn.classList.remove('active'));
+
+        // A. Pobieramy historię 1-minutową z Binance REST API
+        // (Binance pozwala na 1000 świeczek wstecz = ok. 16 godzin historii 1-minutowej)
+        try {
+            console.log("Pobieram historię 1m z Binance...");
+            const response = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=1000');
+            const data = await response.json();
+
+            // Format Binance: [Time, Open, High, Low, Close, Volume...]
+            const formattedData = data.map(item => ({
+                time: item[0] / 1000,
+                open: parseFloat(item[1]),
+                high: parseFloat(item[2]),
+                low: parseFloat(item[3]),
+                close: parseFloat(item[4])
+            }));
+
+            candleSeries.setData(formattedData);
+            
+        } catch (error) {
+            console.error("Błąd historii Binance:", error);
+        }
+
+        // B. Podłączamy WebSocket (dane na bieżąco)
+        if (ws) ws.close();
+        ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@kline_1m');
+
+        ws.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+            const kline = message.k;
+            
+            const candle = {
+                time: kline.t / 1000,
+                open: parseFloat(kline.o),
+                high: parseFloat(kline.h),
+                low: parseFloat(kline.l),
+                close: parseFloat(kline.c)
+            };
+
+            candleSeries.update(candle);
+
+            // Aktualizacja kafelka na górze
+            const btcTag = document.getElementById('price-bitcoin');
+            if (btcTag) {
+                btcTag.innerText = parseFloat(kline.c).toFixed(2) + " $";
+                btcTag.style.color = candle.close >= candle.open ? "#28a745" : "#dc3545";
+            }
+        };
+        
+        // Ustaw widok na koniec
+        chart.timeScale().scrollToPosition(5, true);
+    }
+
+    // ==========================================
+    // 2. TRYB HISTORII (COINGECKO: Długi termin)
+    // ==========================================
+    async function changeInterval(days, title) {
+        // Wyłączamy tryb Live (zamykamy WebSocket)
+        if (ws) { 
+            ws.close(); 
+            ws = null; 
+            console.log("WebSocket zamknięty - tryb historii");
+        }
+        
+        // Zmiana UI
+        document.getElementById('btn-live').className = "btn btn-outline-danger btn-sm"; // Live na szaro
+        chartTitle.innerText = `Bitcoin (USD) - ${title}`;
+
+        // Sprawdzamy Cache
+        if (chartCache[days]) {
+            candleSeries.setData(chartCache[days]);
+            chart.timeScale().fitContent();
+            return;
+        }
+
+        try {
+            console.log(`Pobieram historię CoinGecko dla: ${days} dni...`);
+            const response = await fetch(`https://api.coingecko.com/api/v3/coins/bitcoin/ohlc?vs_currency=usd&days=${days}`);
+            
+            if (response.status === 429) { alert("Limit CoinGecko! Czekaj."); return; }
+            
+            const data = await response.json();
+            const formattedData = data.map(item => ({
+                time: item[0] / 1000,
+                open: item[1], high: item[2], low: item[3], close: item[4]
+            }));
+
+            chartCache[days] = formattedData;
+            candleSeries.setData(formattedData);
+            chart.timeScale().fitContent();
+            
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    // ==========================================
+    // KAFELKI (RESZTA WALUT)
+    // ==========================================
+    function fetchOtherPrices() {
         const priceTags = document.querySelectorAll('.price-tag');
         let symbols = [];
-        priceTags.forEach(tag => symbols.push(tag.dataset.symbol));
+        priceTags.forEach(tag => {
+            if (tag.dataset.symbol.toLowerCase() !== 'bitcoin') {
+                symbols.push(tag.dataset.symbol.toLowerCase());
+            }
+        });
 
         if (symbols.length === 0) return;
 
-        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${symbols.join(',')}&vs_currencies=usd`;
-
-        fetch(url)
+        fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${symbols.join(',')}&vs_currencies=usd`)
             .then(res => res.json())
             .then(data => {
                 priceTags.forEach(tag => {
-                    const symbol = tag.dataset.symbol;
-                    if (data[symbol]) {
-                        tag.innerText = data[symbol].usd + " $";
-                        
-                        // Aktualizuj wykres jeśli to bitcoin
-                        if (symbol === 'bitcoin') {
-                            const now = new Date().toLocaleTimeString();
-                            publicChart.data.labels.push(now);
-                            publicChart.data.datasets[0].data.push(data[symbol].usd);
-                            if (publicChart.data.labels.length > 10) {
-                                publicChart.data.labels.shift();
-                                publicChart.data.datasets[0].data.shift();
-                            }
-                            publicChart.update();
-                        }
-                    }
+                    const s = tag.dataset.symbol.toLowerCase(); 
+                    if (data[s]) tag.innerText = data[s].usd + " $";
                 });
-            });
+            }).catch(e => {});
     }
 
-    fetchPublicPrices();
-    setInterval(fetchPublicPrices, 10000);
+    // START
+    window.addEventListener('resize', () => chart.applyOptions({ width: chartContainer.clientWidth }));
+    
+    // Na start: Tryb LIVE (1 minuta)
+    switchToLive();
+    
+    // Reszta walut co 45s
+    setInterval(fetchOtherPrices, 45000);
+    fetchOtherPrices();
+
 </script>
 {% endblock %}

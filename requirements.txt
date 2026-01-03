@@ -2,3 +2,4 @@ Flask
 Flask-SQLAlchemy
 Flask-Login
 Werkzeug
+pip freeze > requirements.txt
