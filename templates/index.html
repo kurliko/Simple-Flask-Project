@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="container mt-5 text-center">
-    <h1 class="display-4">Witamy na Giełdzie! 📈</h1>
+    <h1 class="display-4">Witamy na Giełdzie! </h1>
     <p class="lead">Zaloguj się, aby stworzyć własny portfel obserwowanych.</p>
     <hr class="my-4">
 
@@ -25,10 +25,10 @@
         <div class="col-md-12">
             <div class="card p-2 shadow-sm">
                 <div class="d-flex justify-content-between align-items-center ps-3 pe-3 pt-2 pb-2">
-                    <h4 id="chart-title">Bitcoin (USD) - LIVE 🔴</h4>
+                    <h4 id="chart-title">Bitcoin </h4>
                     
                     <div class="btn-group" role="group">
-                        <button type="button" class="btn btn-danger btn-sm" id="btn-live" onclick="switchToLive()">LIVE ⚡</button>
+                        <button type="button" class="btn btn-danger btn-sm" id="btn-live" onclick="switchToLive()">LIVE 🔴</button>
                         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="changeInterval(30, '30 Dni')">30D</button>
                         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="changeInterval(365, '1 Rok')">1Y</button>
                     </div>
@@ -73,7 +73,7 @@
     async function switchToLive() {
         // Zmiana UI
         document.getElementById('btn-live').className = "btn btn-danger btn-sm";
-        chartTitle.innerText = "Bitcoin (USD) - REAL TIME (1m) ⚡";
+        chartTitle.innerText = "Bitcoin (USD) - REAL TIME (1m) 🔴 ";
 
         // Resetujemy przyciski "długoterminowe" na szare
         document.querySelectorAll('.btn-group .btn-outline-secondary').forEach(btn => btn.classList.remove('active'));
@@ -84,6 +84,11 @@
             console.log("Pobieram historię 1m z Binance...");
             const response = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=1000');
             const data = await response.json();
+
+            // --- DOPISZ TO: ---
+            console.log("1. Tak wyglądają surowe dane z CoinGecko:", data);
+            console.log("2. Pierwsza świeczka:", data[0]);
+            // ------------------
 
             // Format Binance: [Time, Open, High, Low, Close, Volume...]
             const formattedData = data.map(item => ({
